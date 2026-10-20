@@ -1,0 +1,95 @@
+
+.silt-app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #11151b;
+}
+
+.silt-header,
+.silt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #1c222b;
+}
+
+.silt-header {
+  border-bottom: 1px solid #303946;
+}
+
+.silt-header h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 5px;
+}
+
+.silt-header span,
+.silt-footer {
+  color: #a6b2c2;
+  font-size: 13px;
+}
+
+.viewport {
+  flex: 1;
+  min-height: 0;
+}
+
+.terrain-scene {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.terrain-scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.silt-footer {
+  border-top: 1px solid #303946;
+}
+
+
+.terrain-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  overflow: hidden;
+}
+
+.terrain-scene {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.terrain-scene canvas {
+  display: block;
+}
+
+.regenerate-button {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  padding: 10px 16px;
+  border: 1px solid #53634f;
+  border-radius: 8px;
+  background: #283729;
+  color: #f0f5ed;
+  font: inherit;
+  cursor: pointer;
+}
+
+.regenerate-button:hover {
+  background: #3b503b;
+}
+
+.regenerate-button:active {
+  transform: translateY(1px);
+}
