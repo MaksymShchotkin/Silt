@@ -58,12 +58,12 @@ export class TerrainGenerator {
           );
         }
 
-        stoneHeight = Math.max(
-          1,
-          Math.min(sizeY - 2, stoneHeight)
-        );
+        stoneHeight = Math.max(1, Math.min(sizeY - 2, stoneHeight));
 
-        stoneHeights.push(stoneHeight);
+          // Round to the nearest 0.5 instead of a whole integer.
+          stoneHeight = Math.round(stoneHeight * 2) / 2;
+
+          stoneHeights.push(stoneHeight);
 
         // 2. Generate the surface as a coating over the stone.
         const broadSurface =
