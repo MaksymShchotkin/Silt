@@ -7,9 +7,14 @@ type Point3 = [number, number, number];
 export class GridVisualizer {
   private scene: THREE.Scene;
   private meshes: THREE.Mesh[] = [];
+  private surfaceMesh: THREE.Mesh | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+  }
+
+  getSurfaceMesh(): THREE.Mesh | null {
+    return this.surfaceMesh;
   }
 
   rebuild(data: TerrainData): void {
@@ -18,53 +23,63 @@ export class GridVisualizer {
     const { sizeX, sizeZ, stoneHeights, surfaceHeights } = data;
 
     const indexOf = (x: number, z: number) => z * sizeX + x;
-
     const worldX = (x: number) => x - (sizeX - 1) / 2;
     const worldZ = (z: number) => z - (sizeZ - 1) / 2;
 
-    // Build the green top surface.
-    const topPositions: number[] = [];
-    const topIndices: number[] = [];
+    // Create a triangulated top surface from any height map.
+    const createTopMesh = (
+      heights: number[],
+      color: number
+    ): THREE.Mesh => {
+      const positions: number[] = [];
+      const indices: number[] = [];
 
-    for (let z = 0; z < sizeZ; z++) {
-      for (let x = 0; x < sizeX; x++) {
-        topPositions.push(
-          worldX(x),
-          surfaceHeights[indexOf(x, z)],
-          worldZ(z)
-        );
+      for (let z = 0; z < sizeZ; z++) {
+        for (let x = 0; x < sizeX; x++) {
+          positions.push(
+            worldX(x),
+            heights[indexOf(x, z)],
+            worldZ(z)
+          );
+        }
       }
-    }
 
-    for (let z = 0; z < sizeZ - 1; z++) {
-      for (let x = 0; x < sizeX - 1; x++) {
-        const a = indexOf(x, z);
-        const b = indexOf(x + 1, z);
-        const c = indexOf(x, z + 1);
-        const d = indexOf(x + 1, z + 1);
+      for (let z = 0; z < sizeZ - 1; z++) {
+        for (let x = 0; x < sizeX - 1; x++) {
+          const a = indexOf(x, z);
+          const b = indexOf(x + 1, z);
+          const c = indexOf(x, z + 1);
+          const d = indexOf(x + 1, z + 1);
 
-        topIndices.push(a, c, b);
-        topIndices.push(b, c, d);
+          indices.push(a, c, b, b, c, d);
+        }
       }
-    }
 
-    const topGeometry = new THREE.BufferGeometry();
-    topGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(topPositions, 3)
-    );
-    topGeometry.setIndex(topIndices);
-    topGeometry.computeVertexNormals();
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(positions, 3)
+      );
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
 
-    const surfaceMaterial = new THREE.MeshStandardMaterial({
-      color: 0x78a66a,
-      roughness: 0.9,
-      side: THREE.DoubleSide,
-    });
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
 
-    this.addMesh(topGeometry, surfaceMaterial);
+      return new THREE.Mesh(geometry, material);
+    };
 
-    // Helper for constructing vertical wall quads.
+    // The stone bed gets its own polygonal top.
+    const stoneTop = createTopMesh(stoneHeights, 0x777b80);
+    this.addMesh(stoneTop);
+
+    // The green surface is the visible top of the terrain.
+    this.surfaceMesh = createTopMesh(surfaceHeights, 0x78a66a);
+    this.addMesh(this.surfaceMesh);
+
     const stonePositions: number[] = [];
     const stoneIndices: number[] = [];
     const coatingPositions: number[] = [];
@@ -80,12 +95,7 @@ export class GridVisualizer {
     ) => {
       const start = positions.length / 3;
 
-      positions.push(
-        ...lowerA,
-        ...lowerB,
-        ...upperA,
-        ...upperB
-      );
+      positions.push(...lowerA, ...lowerB, ...upperA, ...upperB);
 
       indices.push(
         start, start + 1, start + 2,
@@ -93,8 +103,12 @@ export class GridVisualizer {
       );
     };
 
-    // Add both the stone wall and green coating to an edge.
-    const addEdge = (x1: number, z1: number, x2: number, z2: number) => {
+    const addEdge = (
+      x1: number,
+      z1: number,
+      x2: number,
+      z2: number
+    ) => {
       const i1 = indexOf(x1, z1);
       const i2 = indexOf(x2, z2);
 
@@ -108,24 +122,18 @@ export class GridVisualizer {
       const surfaceA = surfaceHeights[i1];
       const surfaceB = surfaceHeights[i2];
 
-      // Stone foundation: ground level to the top of the stone.
+      // Gray stone from the base to the stone-bed top.
       addQuad(
-        stonePositions,
-        stoneIndices,
-        [xa, 0, za],
-        [xb, 0, zb],
-        [xa, stoneA, za],
-        [xb, stoneB, zb]
+        stonePositions, stoneIndices,
+        [xa, 0, za], [xb, 0, zb],
+        [xa, stoneA, za], [xb, stoneB, zb]
       );
 
-      // Surface coating: top of stone to the terrain surface.
+      // Green coating above the stone bed.
       addQuad(
-        coatingPositions,
-        coatingIndices,
-        [xa, stoneA, za],
-        [xb, stoneB, zb],
-        [xa, surfaceA, za],
-        [xb, surfaceB, zb]
+        coatingPositions, coatingIndices,
+        [xa, stoneA, za], [xb, stoneB, zb],
+        [xa, surfaceA, za], [xb, surfaceB, zb]
       );
     };
 
@@ -141,31 +149,41 @@ export class GridVisualizer {
       addEdge(sizeX - 1, z, sizeX - 1, z + 1);
     }
 
-    const stoneGeometry = new THREE.BufferGeometry();
-    stoneGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(stonePositions, 3)
+    const makeGeometry = (
+      positions: number[],
+      indices: number[]
+    ): THREE.BufferGeometry => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(positions, 3)
+      );
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    };
+
+    this.addMesh(
+      new THREE.Mesh(
+        makeGeometry(stonePositions, stoneIndices),
+        new THREE.MeshStandardMaterial({
+          color: 0x777b80,
+          roughness: 1,
+          side: THREE.DoubleSide,
+        })
+      )
     );
-    stoneGeometry.setIndex(stoneIndices);
-    stoneGeometry.computeVertexNormals();
 
-    const stoneMaterial = new THREE.MeshStandardMaterial({
-      color: 0x777b80,
-      roughness: 1,
-      side: THREE.DoubleSide,
-    });
-
-    this.addMesh(stoneGeometry, stoneMaterial);
-
-    const coatingGeometry = new THREE.BufferGeometry();
-    coatingGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(coatingPositions, 3)
+    this.addMesh(
+      new THREE.Mesh(
+        makeGeometry(coatingPositions, coatingIndices),
+        new THREE.MeshStandardMaterial({
+          color: 0x78a66a,
+          roughness: 0.9,
+          side: THREE.DoubleSide,
+        })
+      )
     );
-    coatingGeometry.setIndex(coatingIndices);
-    coatingGeometry.computeVertexNormals();
-
-    this.addMesh(coatingGeometry, surfaceMaterial);
 
     // Flat underside of the stone bed.
     const xMin = worldX(0);
@@ -173,37 +191,29 @@ export class GridVisualizer {
     const zMin = worldZ(0);
     const zMax = worldZ(sizeZ - 1);
 
-    const bottomGeometry = new THREE.BufferGeometry();
-    bottomGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(
-        [
-          xMin, 0, zMin,
-          xMax, 0, zMin,
-          xMin, 0, zMax,
-          xMax, 0, zMax,
-        ],
-        3
-      )
+    const bottom = makeGeometry(
+      [
+        xMin, 0, zMin,
+        xMax, 0, zMin,
+        xMin, 0, zMax,
+        xMax, 0, zMax,
+      ],
+      [0, 2, 1, 1, 2, 3]
     );
-    bottomGeometry.setIndex([0, 2, 1, 1, 2, 3]);
-    bottomGeometry.computeVertexNormals();
 
     this.addMesh(
-      bottomGeometry,
-      new THREE.MeshStandardMaterial({
-        color: 0x777b80,
-        roughness: 1,
-        side: THREE.DoubleSide,
-      })
+      new THREE.Mesh(
+        bottom,
+        new THREE.MeshStandardMaterial({
+          color: 0x777b80,
+          roughness: 1,
+          side: THREE.DoubleSide,
+        })
+      )
     );
   }
 
-  private addMesh(
-    geometry: THREE.BufferGeometry,
-    material: THREE.Material
-  ): void {
-    const mesh = new THREE.Mesh(geometry, material);
+  private addMesh(mesh: THREE.Mesh): void {
     this.meshes.push(mesh);
     this.scene.add(mesh);
   }
@@ -214,6 +224,7 @@ export class GridVisualizer {
       mesh.geometry.dispose();
 
       const material = mesh.material;
+
       if (Array.isArray(material)) {
         material.forEach((item) => item.dispose());
       } else {
@@ -222,5 +233,6 @@ export class GridVisualizer {
     }
 
     this.meshes = [];
+    this.surfaceMesh = null;
   }
 }

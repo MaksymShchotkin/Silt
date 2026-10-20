@@ -72,11 +72,19 @@
   display: block;
 }
 
-.regenerate-button {
+
+.terrain-tools {
   position: absolute;
   top: 16px;
   left: 16px;
   z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.regenerate-button {
+  position: static;
   padding: 10px 16px;
   border: 1px solid #53634f;
   border-radius: 8px;
@@ -84,6 +92,7 @@
   color: #f0f5ed;
   font: inherit;
   cursor: pointer;
+  user-select: none;
 }
 
 .regenerate-button:hover {
@@ -92,4 +101,15 @@
 
 .regenerate-button:active {
   transform: translateY(1px);
+}
+
+.regenerate-button.active {
+  background: #d4ad53;
+  border-color: #f0d48b;
+  color: #202018;
+}
+
+.terrain-scene canvas {
+  display: block;
+  touch-action: none;
 }
