@@ -21,22 +21,44 @@ export default function TerrainScene() {
   const regenerateRef = useRef<(() => void) | null>(null);
   const pinchEnabledRef = useRef(false);
   const highlightRef = useRef<THREE.Mesh | null>(null);
+  const ravineModeRef = useRef(false);
+  const ravineMarkersRef = useRef<THREE.Mesh[]>([]);
+  const ravineLineRef = useRef<THREE.Line | null>(null);
+  const ravinePointsRef = useRef<TerrainPoint[]>([]);
+  const ravineRunningRef = useRef(false);
 
   const [pinchEnabled, setPinchEnabled] = useState(false);
   const [ravineOpen, setRavineOpen] = useState(false);
   const [ravineRunning, setRavineRunning] = useState(false);
+  const [selectedRavinePoints, setSelectedRavinePoints] = useState<
+    { x: number; z: number; index: number }[]
+  >([]);
 
   const openRavine = () => {
-  // Disable Pinch when entering Ravine mode.
-  pinchEnabledRef.current = false;
-  setPinchEnabled(false);
+    pinchEnabledRef.current = false;
+    setPinchEnabled(false);
 
-  setRavineOpen(true);
+    ravineModeRef.current = true;
+    setRavineOpen(true);
   };
 
   const closeRavine = () => {
+    ravineModeRef.current = false;
+    ravineRunningRef.current = false;
+
     setRavineRunning(false);
     setRavineOpen(false);
+
+    ravinePointsRef.current = [];
+    setSelectedRavinePoints([]);
+
+    for (const marker of ravineMarkersRef.current) {
+      marker.visible = false;
+    }
+
+    if (ravineLineRef.current) {
+      ravineLineRef.current.visible = false;
+    }
   };
 
   useEffect(() => {
@@ -97,6 +119,84 @@ export default function TerrainScene() {
     highlight.renderOrder = 999;
     scene.add(highlight);
     highlightRef.current = highlight;
+
+    const ravineMarkers: THREE.Mesh[] = [];
+
+    const ravineLineGeometry = new THREE.BufferGeometry();
+
+    const ravineLine = new THREE.Line(
+      ravineLineGeometry,
+      new THREE.LineBasicMaterial({
+        color: 0xffd166,
+        depthTest: false,
+      })
+    );
+
+    ravineLine.visible = false;
+    ravineLine.renderOrder = 1000;
+    scene.add(ravineLine);
+
+    ravineMarkersRef.current = ravineMarkers;
+    ravineLineRef.current = ravineLine;
+
+    const updateRavineVisuals = () => {
+      // Remove old markers.
+      for (const marker of ravineMarkers) {
+        scene.remove(marker);
+        marker.geometry.dispose();
+        (marker.material as THREE.Material).dispose();
+      }
+
+      ravineMarkers.length = 0;
+
+      const points = ravinePointsRef.current;
+
+      // Create a marker for every selected point.
+      for (const point of points) {
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.17, 12, 8),
+          new THREE.MeshBasicMaterial({
+            color: 0xffd166,
+            depthTest: false,
+          })
+        );
+
+        marker.position.set(
+          point.x - (SIZE_X - 1) / 2,
+          terrain.surfaceHeights[point.index] + 0.2,
+          point.z - (SIZE_Z - 1) / 2
+        );
+
+        marker.renderOrder = 1000;
+        scene.add(marker);
+        ravineMarkers.push(marker);
+      }
+
+      // Update the line connecting the selected points.
+      const positions: number[] = [];
+
+      for (const point of points) {
+        positions.push(
+          point.x - (SIZE_X - 1) / 2,
+          terrain.surfaceHeights[point.index] + 0.2,
+          point.z - (SIZE_Z - 1) / 2
+        );
+      }
+
+      ravineLine.geometry.dispose();
+
+      ravineLine.geometry = new THREE.BufferGeometry();
+
+      ravineLine.geometry.setFromPoints(
+        points.map((point) => new THREE.Vector3(
+          point.x - (SIZE_X - 1) / 2,
+          terrain.surfaceHeights[point.index] + 0.2,
+          point.z - (SIZE_Z - 1) / 2
+        ))
+      );
+
+      ravineLine.visible = points.length >= 2;
+};
 
     const regenerate = () => {
       terrain = generator.generate(SIZE_X, SIZE_Y, SIZE_Z);
@@ -252,16 +352,40 @@ export default function TerrainScene() {
     };
 
     const onPointerDown = (event: PointerEvent) => {
+      // Ravine mode: add points instead of starting Pinch.
+      if (ravineModeRef.current) {
+        if (ravineRunningRef.current) return;
+
+        const point = getTerrainPoint(event);
+        if (!point) return;
+
+        // Avoid selecting the same point twice.
+        const alreadySelected = ravinePointsRef.current.some(
+          (selected) => selected.index === point.index
+        );
+
+        if (alreadySelected) return;
+
+        ravinePointsRef.current.push(point);
+
+        updateRavineVisuals();
+
+        setSelectedRavinePoints([...ravinePointsRef.current]);
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        return;
+      }
+
+      // Existing Pinch behavior.
       if (!pinchEnabledRef.current || !hoveredPoint) return;
 
       dragging = true;
       lastPointerY = event.clientY;
-
-      // Prevent OrbitControls from treating this as a camera drag.
       controls.enabled = false;
       renderer.domElement.setPointerCapture(event.pointerId);
       renderer.domElement.style.cursor = 'ns-resize';
-
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -327,10 +451,28 @@ export default function TerrainScene() {
       highlightRef.current = null;
 
       regenerateRef.current = null;
+
+      for (const marker of ravineMarkers) {
+        scene.remove(marker);
+        marker.geometry.dispose();
+        (marker.material as THREE.Material).dispose();
+      }
+
+      scene.remove(ravineLine);
+      ravineLine.geometry.dispose();
+      (ravineLine.material as THREE.Material).dispose();
+
+      ravineMarkersRef.current = [];
+      ravineLineRef.current = null;
+      ravinePointsRef.current = [];
       renderer.dispose();
       renderer.domElement.remove();
     };
   }, []);
+
+  useEffect(() => {
+    ravineRunningRef.current = ravineRunning;
+  }, [ravineRunning]);
 
   const togglePinch = () => {
     const next = !pinchEnabledRef.current;
@@ -390,7 +532,20 @@ export default function TerrainScene() {
         Stop
       </button>
 
-      <button>
+      <button
+        onClick={() => {
+          ravinePointsRef.current = [];
+          setSelectedRavinePoints([]);
+
+          for (const marker of ravineMarkersRef.current) {
+            marker.visible = false;
+          }
+
+          if (ravineLineRef.current) {
+            ravineLineRef.current.visible = false;
+          }
+        }}
+      >
         Deselect
       </button>
 
@@ -402,7 +557,7 @@ export default function TerrainScene() {
     <p>
       {ravineRunning
         ? 'Erosion running...'
-        : 'Select points on the terrain to create a ravine.'}
+        : `Selected points: ${selectedRavinePoints.length}`}
     </p>
   </div>
 )}
