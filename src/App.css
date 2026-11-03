@@ -113,3 +113,63 @@
   display: block;
   touch-action: none;
 }
+
+.ravine-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+
+  width: 220px;
+  padding: 16px;
+
+  background: #252d35;
+  border: 1px solid #53634f;
+  border-radius: 10px;
+
+  color: #f0f5ed;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.ravine-panel h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.ravine-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ravine-buttons button {
+  padding: 9px;
+  border: 1px solid #53634f;
+  border-radius: 6px;
+
+  background: #354139;
+  color: #f0f5ed;
+
+  font: inherit;
+  cursor: pointer;
+}
+
+.ravine-buttons button:hover:not(:disabled) {
+  background: #4a5b4b;
+}
+
+.ravine-buttons button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ravine-buttons .ravine-start {
+  background: #347b4b;
+}
+
+.ravine-panel p {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #b9c5b5;
+  line-height: 1.5;
+}

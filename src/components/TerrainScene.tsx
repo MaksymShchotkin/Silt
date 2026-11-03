@@ -23,6 +23,21 @@ export default function TerrainScene() {
   const highlightRef = useRef<THREE.Mesh | null>(null);
 
   const [pinchEnabled, setPinchEnabled] = useState(false);
+  const [ravineOpen, setRavineOpen] = useState(false);
+  const [ravineRunning, setRavineRunning] = useState(false);
+
+  const openRavine = () => {
+  // Disable Pinch when entering Ravine mode.
+  pinchEnabledRef.current = false;
+  setPinchEnabled(false);
+
+  setRavineOpen(true);
+  };
+
+  const closeRavine = () => {
+    setRavineRunning(false);
+    setRavineOpen(false);
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -340,6 +355,13 @@ export default function TerrainScene() {
         </button>
 
         <button
+          className="regenerate-button"
+          onClick={openRavine}
+        >
+          Ravine
+        </button>
+
+        <button
           className={`regenerate-button ${pinchEnabled ? 'active' : ''}`}
           onClick={togglePinch}
           aria-pressed={pinchEnabled}
@@ -347,6 +369,43 @@ export default function TerrainScene() {
           {pinchEnabled ? 'Pinch: ON' : 'Pinch'}
         </button>
       </div>
+
+      {ravineOpen && (
+  <div className="ravine-panel">
+    <h3>Ravine tool</h3>
+
+    <div className="ravine-buttons">
+      <button
+        className="ravine-start"
+        onClick={() => setRavineRunning(true)}
+        disabled={ravineRunning}
+      >
+        Start
+      </button>
+
+      <button
+        onClick={() => setRavineRunning(false)}
+        disabled={!ravineRunning}
+      >
+        Stop
+      </button>
+
+      <button>
+        Deselect
+      </button>
+
+      <button onClick={closeRavine}>
+        Close
+      </button>
+    </div>
+
+    <p>
+      {ravineRunning
+        ? 'Erosion running...'
+        : 'Select points on the terrain to create a ravine.'}
+    </p>
+  </div>
+)}
     </div>
   );
 }
