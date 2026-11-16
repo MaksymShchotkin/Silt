@@ -9,6 +9,10 @@ import { TerrainGenerator } from '../terrain/TerrainGenerator';
 const SIZE_X = 20;
 const SIZE_Y = 10;
 const SIZE_Z = 20;
+const RAVINE_WIDTH = 1.8;
+const RAVINE_SPEED = 2;
+const RAVINE_INTERVAL = 50;
+const TERRAIN_BOTTOM = 0.1;
 
 type TerrainPoint = {
   x: number;
@@ -205,6 +209,142 @@ export default function TerrainScene() {
     };
 
     regenerateRef.current = regenerate;
+
+    // Distance from a 2D point to a line segment.
+    const distanceToSegment = (
+      px: number,
+      pz: number,
+      ax: number,
+      az: number,
+      bx: number,
+      bz: number
+    ): number => {
+      const dx = bx - ax;
+      const dz = bz - az;
+
+      const lengthSquared = dx * dx + dz * dz;
+
+      if (lengthSquared === 0) {
+        return Math.hypot(px - ax, pz - az);
+      }
+
+      const t = THREE.MathUtils.clamp(
+        ((px - ax) * dx + (pz - az) * dz) / lengthSquared,
+        0,
+        1
+      );
+
+      const closestX = ax + t * dx;
+      const closestZ = az + t * dz;
+
+      return Math.hypot(px - closestX, pz - closestZ);
+    };
+
+
+const erodeRavine = (deltaSeconds: number) => {
+  const selectedPoints = ravinePointsRef.current;
+
+  // A ravine needs at least two selected points.
+  if (selectedPoints.length < 2) return;
+
+  // Use the same smooth curve as the visible ravine path.
+  const curvePoints = selectedPoints.map((point) =>
+    new THREE.Vector3(point.x, 0, point.z)
+  );
+
+  const curve = new THREE.CatmullRomCurve3(curvePoints);
+  const pathPoints = curve.getPoints(
+    (selectedPoints.length - 1) * 20
+  );
+
+  let terrainChanged = false;
+  let changedVertices = 0;  
+
+  for (let z = 0; z < SIZE_Z; z++) {
+    for (let x = 0; x < SIZE_X; x++) {
+      // Find the shortest distance from this grid point to the path.
+      let shortestDistance = Infinity;
+
+      for (let i = 0; i < pathPoints.length - 1; i++) {
+        const distance = distanceToSegment(
+          x,
+          z,
+          pathPoints[i].x,
+          pathPoints[i].z,
+          pathPoints[i + 1].x,
+          pathPoints[i + 1].z
+        );
+
+        shortestDistance = Math.min(shortestDistance, distance);
+      }
+
+      if (shortestDistance >= RAVINE_WIDTH) continue;
+
+      // The center erodes fastest; the edges erode more gently.
+      const falloff = 1 - shortestDistance / RAVINE_WIDTH;
+      const weight = falloff * falloff;
+
+      const index = z * SIZE_X + x;
+      const erosionAmount = RAVINE_SPEED * deltaSeconds * weight;
+
+      const stoneHeight = terrain.stoneHeights[index];
+      const surfaceHeight = terrain.surfaceHeights[index];
+
+      // First remove the green surface coating.
+      const coatingThickness = Math.max(
+        0,
+        surfaceHeight - stoneHeight
+      );
+
+      if (coatingThickness > 0) {
+        const surfaceDrop = Math.min(
+          coatingThickness,
+          erosionAmount
+        );
+
+        terrain.surfaceHeights[index] -= surfaceDrop;
+
+        // If the coating was exhausted, any remaining erosion
+        // starts lowering the exposed stone.
+        const remainingErosion = erosionAmount - surfaceDrop;
+
+        if (remainingErosion > 0) {
+          const stoneDrop = Math.min(
+            remainingErosion,
+            Math.max(0, stoneHeight - TERRAIN_BOTTOM)
+          );
+
+          terrain.stoneHeights[index] -= stoneDrop;
+          terrain.surfaceHeights[index] -= stoneDrop;
+        }
+      } else {
+        // No coating remains: erode the stone and its exposed top.
+        const stoneDrop = Math.min(
+          erosionAmount,
+          Math.max(0, stoneHeight - TERRAIN_BOTTOM)
+        );
+
+        terrain.stoneHeights[index] -= stoneDrop;
+        terrain.surfaceHeights[index] -= stoneDrop;
+      }
+
+      if (
+        terrain.stoneHeights[index] !== stoneHeight ||
+        terrain.surfaceHeights[index] !== surfaceHeight
+      ) {
+        terrainChanged = true;
+        changedVertices++;
+      }
+    }
+  }
+
+  if (terrainChanged) {
+    console.log('Ravine erosion changed vertices:', changedVertices);
+    visualizer.rebuild(terrain);
+  } else {
+    console.log('Ravine erosion: no terrain changes');
+  }
+};
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -427,8 +567,37 @@ export default function TerrainScene() {
 
     resizeObserver.observe(container);
 
-    renderer.setAnimationLoop(() => {
+    let lastFrameTime: number | null = null;
+    let erosionAccumulator = 0;
+
+    renderer.setAnimationLoop((time) => {
       controls.update();
+
+      if (
+        ravineRunningRef.current &&
+        ravinePointsRef.current.length >= 2
+      ) {
+        if (lastFrameTime === null) {
+          lastFrameTime = time;
+        }
+
+        const deltaSeconds = Math.min(
+          (time - lastFrameTime) / 1000,
+          0.1
+        );
+
+        lastFrameTime = time;
+        erosionAccumulator += deltaSeconds;
+
+        if (erosionAccumulator >= RAVINE_INTERVAL / 1000) {
+          erodeRavine(erosionAccumulator);
+          erosionAccumulator = 0;
+        }
+      } else {
+        lastFrameTime = null;
+        erosionAccumulator = 0;
+      }
+
       renderer.render(scene, camera);
     });
 
@@ -519,14 +688,20 @@ export default function TerrainScene() {
     <div className="ravine-buttons">
       <button
         className="ravine-start"
-        onClick={() => setRavineRunning(true)}
-        disabled={ravineRunning}
+        onClick={() => {
+          ravineRunningRef.current = true;
+          setRavineRunning(true);
+        }}
+        disabled={ravineRunning || selectedRavinePoints.length < 2}
       >
         Start
       </button>
 
       <button
-        onClick={() => setRavineRunning(false)}
+        onClick={() => {
+          ravineRunningRef.current = false;
+          setRavineRunning(false);
+        }}
         disabled={!ravineRunning}
       >
         Stop
