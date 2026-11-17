@@ -22,6 +22,7 @@ export class RavineTool {
   private readonly markers: THREE.Mesh[] = [];
   private readonly line: THREE.Line;
   private points: TerrainPoint[] = [];
+  private erosionWeights = new Float32Array(SIZE_X * SIZE_Z);
 
   constructor(options: RavineToolOptions) {
     this.options = options;
@@ -47,6 +48,7 @@ export class RavineTool {
     }
 
     this.points.push(point);
+    this.updateErosionWeights();
     this.updateVisuals();
     this.options.onPointsChange([...this.points]);
     return true;
@@ -54,6 +56,7 @@ export class RavineTool {
 
   clear(): void {
     this.points = [];
+    this.erosionWeights.fill(0);
     this.options.onPointsChange([]);
 
     for (const marker of this.markers) {
@@ -67,77 +70,49 @@ export class RavineTool {
     if (this.points.length < 2) return;
 
     const terrain = this.options.getTerrain();
-    const curvePoints = this.points.map(
-      (point) => new THREE.Vector3(point.x, 0, point.z)
-    );
-    const curve = new THREE.CatmullRomCurve3(curvePoints);
-    const pathPoints = curve.getPoints((this.points.length - 1) * 20);
     let terrainChanged = false;
-    let changedVertices = 0;
 
-    for (let z = 0; z < SIZE_Z; z++) {
-      for (let x = 0; x < SIZE_X; x++) {
-        let shortestDistance = Infinity;
+    for (let index = 0; index < this.erosionWeights.length; index++) {
+      const weight = this.erosionWeights[index];
+      if (weight === 0) continue;
 
-        for (let i = 0; i < pathPoints.length - 1; i++) {
-          const distance = this.distanceToSegment(
-            x,
-            z,
-            pathPoints[i].x,
-            pathPoints[i].z,
-            pathPoints[i + 1].x,
-            pathPoints[i + 1].z
-          );
-          shortestDistance = Math.min(shortestDistance, distance);
-        }
+      const erosionAmount = RAVINE_SPEED * deltaSeconds * weight;
+      const stoneHeight = terrain.stoneHeights[index];
+      const surfaceHeight = terrain.surfaceHeights[index];
+      const coatingThickness = Math.max(0, surfaceHeight - stoneHeight);
 
-        if (shortestDistance >= RAVINE_WIDTH) continue;
+      if (coatingThickness > 0) {
+        const surfaceDrop = Math.min(coatingThickness, erosionAmount);
+        terrain.surfaceHeights[index] -= surfaceDrop;
+        const remainingErosion = erosionAmount - surfaceDrop;
 
-        const falloff = 1 - shortestDistance / RAVINE_WIDTH;
-        const weight = falloff * falloff;
-        const index = z * SIZE_X + x;
-        const erosionAmount = RAVINE_SPEED * deltaSeconds * weight;
-        const stoneHeight = terrain.stoneHeights[index];
-        const surfaceHeight = terrain.surfaceHeights[index];
-        const coatingThickness = Math.max(0, surfaceHeight - stoneHeight);
-
-        if (coatingThickness > 0) {
-          const surfaceDrop = Math.min(coatingThickness, erosionAmount);
-          terrain.surfaceHeights[index] -= surfaceDrop;
-          const remainingErosion = erosionAmount - surfaceDrop;
-
-          if (remainingErosion > 0) {
-            const stoneDrop = Math.min(
-              remainingErosion,
-              Math.max(0, stoneHeight - TERRAIN_BOTTOM)
-            );
-            terrain.stoneHeights[index] -= stoneDrop;
-            terrain.surfaceHeights[index] -= stoneDrop;
-          }
-        } else {
+        if (remainingErosion > 0) {
           const stoneDrop = Math.min(
-            erosionAmount,
+            remainingErosion,
             Math.max(0, stoneHeight - TERRAIN_BOTTOM)
           );
           terrain.stoneHeights[index] -= stoneDrop;
           terrain.surfaceHeights[index] -= stoneDrop;
         }
+      } else {
+        const stoneDrop = Math.min(
+          erosionAmount,
+          Math.max(0, stoneHeight - TERRAIN_BOTTOM)
+        );
+        terrain.stoneHeights[index] -= stoneDrop;
+        terrain.surfaceHeights[index] -= stoneDrop;
+      }
 
-        if (
-          terrain.stoneHeights[index] !== stoneHeight ||
-          terrain.surfaceHeights[index] !== surfaceHeight
-        ) {
-          terrainChanged = true;
-          changedVertices++;
-        }
+      if (
+        terrain.stoneHeights[index] !== stoneHeight ||
+        terrain.surfaceHeights[index] !== surfaceHeight
+      ) {
+        terrainChanged = true;
       }
     }
 
     if (terrainChanged) {
-      console.log('Ravine erosion changed vertices:', changedVertices);
-      this.options.visualizer.rebuild(terrain);
-    } else {
-      console.log('Ravine erosion: no terrain changes');
+      this.options.visualizer.update(terrain);
     }
   }
 
@@ -195,6 +170,43 @@ export class RavineTool {
       )
     );
     this.line.visible = this.points.length >= 2;
+  }
+
+  private updateErosionWeights(): void {
+    this.erosionWeights.fill(0);
+
+    if (this.points.length < 2) return;
+
+    const curvePoints = this.points.map(
+      (point) => new THREE.Vector3(point.x, 0, point.z)
+    );
+    const curve = new THREE.CatmullRomCurve3(curvePoints);
+    const pathPoints = curve.getPoints((this.points.length - 1) * 20);
+
+    for (let z = 0; z < SIZE_Z; z++) {
+      for (let x = 0; x < SIZE_X; x++) {
+        let shortestDistance = Infinity;
+
+        for (let i = 0; i < pathPoints.length - 1; i++) {
+          shortestDistance = Math.min(
+            shortestDistance,
+            this.distanceToSegment(
+              x,
+              z,
+              pathPoints[i].x,
+              pathPoints[i].z,
+              pathPoints[i + 1].x,
+              pathPoints[i + 1].z
+            )
+          );
+        }
+
+        if (shortestDistance >= RAVINE_WIDTH) continue;
+
+        const falloff = 1 - shortestDistance / RAVINE_WIDTH;
+        this.erosionWeights[z * SIZE_X + x] = falloff * falloff;
+      }
+    }
   }
 
   private distanceToSegment(

@@ -109,7 +109,7 @@ export class PinchTool {
           }
         }
 
-        visualizer.rebuild(terrain);
+        visualizer.update(terrain);
       }
 
       this.moveHighlight(this.hoveredPoint);
