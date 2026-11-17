@@ -3,15 +3,12 @@ import type { TerrainData } from './TerrainData';
 
 type Point3 = [number, number, number];
 
-const STONE_COLOR = 0x777b80;
-const SURFACE_COLOR = 0x78a66a;
 const COATING_BLEND_DEPTH = 0.35;
-
-const stoneColor = new THREE.Color(STONE_COLOR);
-const surfaceColor = new THREE.Color(SURFACE_COLOR);
 
 export class GridVisualizer {
   private readonly scene: THREE.Scene;
+  private readonly lowerColor = new THREE.Color();
+  private readonly upperColor = new THREE.Color();
   private meshes: THREE.Mesh[] = [];
   private surfaceMesh: THREE.Mesh | null = null;
   private topMeshes: THREE.Mesh[] = [];
@@ -38,6 +35,8 @@ export class GridVisualizer {
     const { sizeX, sizeZ, stoneHeights, surfaceHeights } = data;
     this.sizeX = sizeX;
     this.sizeZ = sizeZ;
+    this.lowerColor.setHex(data.lowerLayer.color);
+    this.upperColor.setHex(data.upperLayer.color);
 
     const indexOf = (x: number, z: number) => z * sizeX + x;
     const worldX = (x: number) => x - (sizeX - 1) / 2;
@@ -61,9 +60,9 @@ export class GridVisualizer {
 
         positions.push(worldX(x), surfaceHeights[index], worldZ(z));
         colors.push(
-          THREE.MathUtils.lerp(stoneColor.r, surfaceColor.r, blend),
-          THREE.MathUtils.lerp(stoneColor.g, surfaceColor.g, blend),
-          THREE.MathUtils.lerp(stoneColor.b, surfaceColor.b, blend)
+          THREE.MathUtils.lerp(this.lowerColor.r, this.upperColor.r, blend),
+          THREE.MathUtils.lerp(this.lowerColor.g, this.upperColor.g, blend),
+          THREE.MathUtils.lerp(this.lowerColor.b, this.upperColor.b, blend)
         );
       }
     }
@@ -106,7 +105,7 @@ export class GridVisualizer {
     this.stoneSideMesh = new THREE.Mesh(
       this.makeGeometry(sidePositions.stone, sidePositions.stoneIndices),
       new THREE.MeshStandardMaterial({
-        color: STONE_COLOR,
+        color: data.lowerLayer.color,
         roughness: 1,
         side: THREE.DoubleSide,
       })
@@ -116,7 +115,7 @@ export class GridVisualizer {
     this.coatingSideMesh = new THREE.Mesh(
       this.makeGeometry(sidePositions.coating, sidePositions.coatingIndices),
       new THREE.MeshStandardMaterial({
-        color: SURFACE_COLOR,
+        color: data.upperLayer.color,
         roughness: 0.9,
         side: THREE.DoubleSide,
       })
@@ -136,7 +135,7 @@ export class GridVisualizer {
       new THREE.Mesh(
         bottom,
         new THREE.MeshStandardMaterial({
-          color: STONE_COLOR,
+          color: data.lowerLayer.color,
           roughness: 1,
           side: THREE.DoubleSide,
         })
@@ -182,9 +181,9 @@ export class GridVisualizer {
         );
         color.setXYZ(
           index,
-          THREE.MathUtils.lerp(stoneColor.r, surfaceColor.r, blend),
-          THREE.MathUtils.lerp(stoneColor.g, surfaceColor.g, blend),
-          THREE.MathUtils.lerp(stoneColor.b, surfaceColor.b, blend)
+          THREE.MathUtils.lerp(this.lowerColor.r, this.upperColor.r, blend),
+          THREE.MathUtils.lerp(this.lowerColor.g, this.upperColor.g, blend),
+          THREE.MathUtils.lerp(this.lowerColor.b, this.upperColor.b, blend)
         );
       }
     }

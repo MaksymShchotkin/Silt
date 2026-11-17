@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { GridVisualizer } from '../terrain/GridVisualizer';
+import type { TerrainBiome } from '../terrain/TerrainData';
 import { TerrainGenerator } from '../terrain/TerrainGenerator';
 import type { TerrainPoint } from '../terrain/TerrainPoint';
 import { PinchTool } from '../terrain/tools/PinchTool';
@@ -18,7 +19,9 @@ type TerrainViewportProps = {
   ravineMode: boolean;
   ravineRunning: boolean;
   onRavinePointsChange: (points: TerrainPoint[]) => void;
-  onRegenerateReady: (regenerate: (() => void) | null) => void;
+  onRegenerateReady: (
+    regenerate: ((biome: TerrainBiome) => void) | null
+  ) => void;
   onClearRavineReady: (clearRavine: (() => void) | null) => void;
 };
 
@@ -143,8 +146,8 @@ export default function TerrainViewport({
       onPointsChange: (points) => propsRef.current.onRavinePointsChange(points),
     });
 
-    const regenerate = () => {
-      terrain = generator.generate(SIZE_X, SIZE_Y, SIZE_Z);
+    const regenerate = (biome: TerrainBiome) => {
+      terrain = generator.generate(SIZE_X, SIZE_Y, SIZE_Z, biome);
       visualizer.rebuild(terrain);
       pinchTool.hideHighlight();
     };

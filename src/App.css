@@ -109,6 +109,71 @@
   color: #202018;
 }
 
+.biome-panel {
+  position: absolute;
+  top: 66px;
+  left: 16px;
+  z-index: 20;
+  width: 220px;
+  padding: 16px;
+  background: #252d35;
+  border: 1px solid #53634f;
+  border-radius: 10px;
+  color: #f0f5ed;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.biome-panel h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.biome-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.biome-choice,
+.biome-cancel {
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #172019;
+  font: inherit;
+  cursor: pointer;
+}
+
+.biome-choice.hills {
+  background: #78a66a;
+  border-color: #9dc58f;
+}
+
+.biome-choice.hills:hover {
+  background: #8dbb7e;
+}
+
+.biome-choice.desert {
+  background: #d8bd73;
+  border-color: #efdb9b;
+}
+
+.biome-choice.desert:hover {
+  background: #e6ce8b;
+}
+
+.biome-cancel {
+  width: 100%;
+  margin-top: 8px;
+  background: #354139;
+  border-color: #53634f;
+  color: #f0f5ed;
+}
+
+.biome-cancel:hover {
+  background: #4a5b4b;
+}
+
 .terrain-scene canvas {
   display: block;
   touch-action: none;

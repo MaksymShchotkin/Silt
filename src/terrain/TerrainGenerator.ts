@@ -1,5 +1,5 @@
 
-import type { TerrainData } from './TerrainData';
+import type { TerrainBiome, TerrainData } from './TerrainData';
 
 type Hill = {
   x: number;
@@ -10,6 +10,19 @@ type Hill = {
 
 export class TerrainGenerator {
   generate(
+    sizeX: number,
+    sizeY: number,
+    sizeZ: number,
+    biome: TerrainBiome = 'hills'
+  ): TerrainData {
+    if (biome === 'desert') {
+      return this.generateDesert(sizeX, sizeY, sizeZ);
+    }
+
+    return this.generateHills(sizeX, sizeY, sizeZ);
+  }
+
+  private generateHills(
     sizeX: number,
     sizeY: number,
     sizeZ: number
@@ -90,6 +103,75 @@ export class TerrainGenerator {
     return {
       sizeX,
       sizeZ,
+      biome: 'hills',
+      lowerLayer: {
+        name: 'Stone',
+        color: 0x777b80,
+        hardiness: 3,
+      },
+      upperLayer: {
+        name: 'Surface',
+        color: 0x78a66a,
+        hardiness: 1,
+      },
+      stoneHeights,
+      surfaceHeights,
+    };
+  }
+
+  private generateDesert(
+    sizeX: number,
+    sizeY: number,
+    sizeZ: number
+  ): TerrainData {
+    const stoneHeights: number[] = [];
+    const surfaceHeights: number[] = [];
+    const phaseX = Math.random() * Math.PI * 2;
+    const phaseZ = Math.random() * Math.PI * 2;
+    const dunePhase = Math.random() * Math.PI * 2;
+    const duneDirection = Math.random() * Math.PI;
+    const duneX = Math.cos(duneDirection);
+    const duneZ = Math.sin(duneDirection);
+
+    for (let z = 0; z < sizeZ; z++) {
+      for (let x = 0; x < sizeX; x++) {
+        const sandstoneHeight = Math.max(
+          1,
+          Math.min(
+            sizeY - 2,
+            2.8 +
+              Math.sin(x * 0.18 + phaseX) * 0.45 +
+              Math.cos(z * 0.2 + phaseZ) * 0.45
+          )
+        );
+        const duneWave = (
+          Math.sin((x * duneX + z * duneZ) * 0.8 + dunePhase) + 1
+        ) / 2;
+        const crossRipple =
+          Math.sin((-x * duneZ + z * duneX) * 0.38 + phaseZ) * 0.08;
+        const duneHeight =
+          sandstoneHeight +
+          Math.max(0.3, 0.3 + Math.pow(duneWave, 2) * 0.85 + crossRipple);
+
+        stoneHeights.push(sandstoneHeight);
+        surfaceHeights.push(Math.min(sizeY - 0.1, duneHeight));
+      }
+    }
+
+    return {
+      sizeX,
+      sizeZ,
+      biome: 'desert',
+      lowerLayer: {
+        name: 'Sandstone',
+        color: 0x9b704d,
+        hardiness: 1,
+      },
+      upperLayer: {
+        name: 'Sand',
+        color: 0xd8bd73,
+        hardiness: 0.5,
+      },
       stoneHeights,
       surfaceHeights,
     };

@@ -76,19 +76,23 @@ export class RavineTool {
       const weight = this.erosionWeights[index];
       if (weight === 0) continue;
 
-      const erosionAmount = RAVINE_SPEED * deltaSeconds * weight;
+      let erosionBudget = RAVINE_SPEED * deltaSeconds * weight;
       const stoneHeight = terrain.stoneHeights[index];
       const surfaceHeight = terrain.surfaceHeights[index];
       const coatingThickness = Math.max(0, surfaceHeight - stoneHeight);
 
       if (coatingThickness > 0) {
-        const surfaceDrop = Math.min(coatingThickness, erosionAmount);
+        const surfaceHardiness = terrain.upperLayer.hardiness;
+        const surfaceDrop = Math.min(
+          coatingThickness,
+          erosionBudget / surfaceHardiness
+        );
         terrain.surfaceHeights[index] -= surfaceDrop;
-        const remainingErosion = erosionAmount - surfaceDrop;
+        erosionBudget -= surfaceDrop * surfaceHardiness;
 
-        if (remainingErosion > 0) {
+        if (erosionBudget > 0) {
           const stoneDrop = Math.min(
-            remainingErosion,
+            erosionBudget / terrain.lowerLayer.hardiness,
             Math.max(0, stoneHeight - TERRAIN_BOTTOM)
           );
           terrain.stoneHeights[index] -= stoneDrop;
@@ -96,7 +100,7 @@ export class RavineTool {
         }
       } else {
         const stoneDrop = Math.min(
-          erosionAmount,
+          erosionBudget / terrain.lowerLayer.hardiness,
           Math.max(0, stoneHeight - TERRAIN_BOTTOM)
         );
         terrain.stoneHeights[index] -= stoneDrop;
