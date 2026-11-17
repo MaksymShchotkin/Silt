@@ -7,7 +7,7 @@ import type { TerrainPoint } from '../TerrainPoint';
 const SIZE_X = 20;
 const SIZE_Z = 20;
 const RAVINE_WIDTH = 1.8;
-const RAVINE_SPEED = 2;
+const RAVINE_SPEED = 0.2;
 const TERRAIN_BOTTOM = 0.1;
 
 type RavineToolOptions = {

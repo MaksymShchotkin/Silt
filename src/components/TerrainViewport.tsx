@@ -109,10 +109,10 @@ export default function TerrainViewport({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
-      const surfaceMesh = visualizer.getSurfaceMesh();
-      if (!surfaceMesh) return null;
+      const topMeshes = visualizer.getTopMeshes();
+      if (topMeshes.length === 0) return null;
 
-      const hit = raycaster.intersectObject(surfaceMesh, false)[0];
+      const hit = raycaster.intersectObjects(topMeshes, false)[0];
       if (!hit) return null;
 
       const gridX = hit.point.x + (SIZE_X - 1) / 2;

@@ -4,10 +4,16 @@ import type { TerrainData } from './TerrainData';
 
 type Point3 = [number, number, number];
 
+const STONE_COLOR = 0x777b80;
+const SURFACE_COLOR = 0x78a66a;
+const COATING_BLEND_DEPTH = 0.35;
+const COATING_EPSILON = 0.0001;
+
 export class GridVisualizer {
   private scene: THREE.Scene;
   private meshes: THREE.Mesh[] = [];
   private surfaceMesh: THREE.Mesh | null = null;
+  private topMeshes: THREE.Mesh[] = [];
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -15,6 +21,10 @@ export class GridVisualizer {
 
   getSurfaceMesh(): THREE.Mesh | null {
     return this.surfaceMesh;
+  }
+
+  getTopMeshes(): THREE.Mesh[] {
+    return this.topMeshes;
   }
 
   rebuild(data: TerrainData): void {
@@ -27,10 +37,7 @@ export class GridVisualizer {
     const worldZ = (z: number) => z - (sizeZ - 1) / 2;
 
     // Create a triangulated top surface from any height map.
-    const createTopMesh = (
-      heights: number[],
-      color: number
-    ): THREE.Mesh => {
+    const createTopMesh = (heights: number[], color: number): THREE.Mesh => {
       const positions: number[] = [];
       const indices: number[] = [];
 
@@ -72,13 +79,87 @@ export class GridVisualizer {
       return new THREE.Mesh(geometry, material);
     };
 
+    const createSurfaceMesh = (): THREE.Mesh => {
+      const positions: number[] = [];
+      const colors: number[] = [];
+      const indices: number[] = [];
+      const stoneColor = new THREE.Color(STONE_COLOR);
+      const surfaceColor = new THREE.Color(SURFACE_COLOR);
+
+      for (let z = 0; z < sizeZ; z++) {
+        for (let x = 0; x < sizeX; x++) {
+          const index = indexOf(x, z);
+          const thickness = Math.max(
+            0,
+            surfaceHeights[index] - stoneHeights[index]
+          );
+          const blend = THREE.MathUtils.clamp(
+            thickness / COATING_BLEND_DEPTH,
+            0,
+            1
+          );
+          const vertexColor = stoneColor.clone().lerp(surfaceColor, blend);
+
+          positions.push(
+            worldX(x),
+            surfaceHeights[index],
+            worldZ(z)
+          );
+          colors.push(vertexColor.r, vertexColor.g, vertexColor.b);
+        }
+      }
+
+      const hasCoating = (index: number) =>
+        surfaceHeights[index] - stoneHeights[index] > COATING_EPSILON;
+
+      for (let z = 0; z < sizeZ - 1; z++) {
+        for (let x = 0; x < sizeX - 1; x++) {
+          const a = indexOf(x, z);
+          const b = indexOf(x + 1, z);
+          const c = indexOf(x, z + 1);
+          const d = indexOf(x + 1, z + 1);
+
+          if (hasCoating(a) || hasCoating(c) || hasCoating(b)) {
+            indices.push(a, c, b);
+          }
+
+          if (hasCoating(b) || hasCoating(c) || hasCoating(d)) {
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(positions, 3)
+      );
+      geometry.setAttribute(
+        'color',
+        new THREE.Float32BufferAttribute(colors, 3)
+      );
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      return new THREE.Mesh(
+        geometry,
+        new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          vertexColors: true,
+          roughness: 0.9,
+          side: THREE.DoubleSide,
+        })
+      );
+    };
+
     // The stone bed gets its own polygonal top.
-    const stoneTop = createTopMesh(stoneHeights, 0x777b80);
+    const stoneTop = createTopMesh(stoneHeights, STONE_COLOR);
     this.addMesh(stoneTop);
 
-    // The green surface is the visible top of the terrain.
-    this.surfaceMesh = createTopMesh(surfaceHeights, 0x78a66a);
+    // Exposed stone triangles are omitted; thin coating blends into stone.
+    this.surfaceMesh = createSurfaceMesh();
     this.addMesh(this.surfaceMesh);
+    this.topMeshes = [stoneTop, this.surfaceMesh];
 
     const stonePositions: number[] = [];
     const stoneIndices: number[] = [];
@@ -167,7 +248,7 @@ export class GridVisualizer {
       new THREE.Mesh(
         makeGeometry(stonePositions, stoneIndices),
         new THREE.MeshStandardMaterial({
-          color: 0x777b80,
+          color: STONE_COLOR,
           roughness: 1,
           side: THREE.DoubleSide,
         })
@@ -178,7 +259,7 @@ export class GridVisualizer {
       new THREE.Mesh(
         makeGeometry(coatingPositions, coatingIndices),
         new THREE.MeshStandardMaterial({
-          color: 0x78a66a,
+          color: SURFACE_COLOR,
           roughness: 0.9,
           side: THREE.DoubleSide,
         })
@@ -205,7 +286,7 @@ export class GridVisualizer {
       new THREE.Mesh(
         bottom,
         new THREE.MeshStandardMaterial({
-          color: 0x777b80,
+          color: STONE_COLOR,
           roughness: 1,
           side: THREE.DoubleSide,
         })
@@ -234,5 +315,6 @@ export class GridVisualizer {
 
     this.meshes = [];
     this.surfaceMesh = null;
+    this.topMeshes = [];
   }
 }
